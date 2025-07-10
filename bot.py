@@ -2,7 +2,7 @@ import asyncio
 import os
 from aiogram import Bot, Dispatcher, F, types
 from aiogram.enums import ParseMode
-from aiogram.types import Message
+from aiogram.types import Message, ReplyKeyboardMarkup, KeyboardButton
 from aiogram.client.default import DefaultBotProperties
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.fsm.storage.memory import MemoryStorage
@@ -33,20 +33,39 @@ class QAForm(StatesGroup):
     waiting_for_question = State()
     waiting_for_answer = State()
 
-# Старт: запросить вопрос
+# Меню с кнопкой "Старт"
+start_menu = ReplyKeyboardMarkup(
+    keyboard=[
+        [KeyboardButton(text="🚀 Старт")]
+    ],
+    resize_keyboard=True,
+    input_field_placeholder="Нажми кнопку или введи /start"
+)
+
+# Приветствие и меню
 @dp.message(CommandStart())
 async def start_handler(message: Message, state: FSMContext):
-    await message.answer("👋 Привет! Введи вопрос:")
+    await state.clear()
+    await message.answer(
+        "👋 Привет! Я бот проекта <b>Output-Safety & Leakage Guard</b>.\n\n"
+        "Чтобы начать работу, нажми кнопку «🚀 Старт» ниже.",
+        reply_markup=start_menu
+    )
+
+# Нажата кнопка "Старт"
+@dp.message(F.text == "🚀 Старт")
+async def begin_workflow(message: Message, state: FSMContext):
+    await message.answer("✍️ Введи, пожалуйста, вопрос:")
     await state.set_state(QAForm.waiting_for_question)
 
-# Получаем вопрос, просим ввести ответ
+# Получаем вопрос
 @dp.message(QAForm.waiting_for_question)
 async def handle_question(message: Message, state: FSMContext):
     await state.update_data(question=message.text)
     await message.answer("Спасибо! Теперь введи ответ:")
     await state.set_state(QAForm.waiting_for_answer)
 
-# Получаем ответ, вызываем сервис и завершаем
+# Обрабатываем ответ и возвращаем результат
 @dp.message(QAForm.waiting_for_answer)
 async def handle_answer(message: Message, state: FSMContext):
     user_data = await state.get_data()
@@ -58,11 +77,10 @@ async def handle_answer(message: Message, state: FSMContext):
     ans = ProcessingService()
     masked_answer = await ans.getMascedAnswer(question, answer)
 
-    # Ответ пользователю
     await message.answer(masked_answer)
 
-    # Переход обратно к вопросу
-    await message.answer("🔁 Введи следующий вопрос или /start для перезапуска:")
+    # Предлагаем задать новый вопрос
+    await message.answer("🔁 Введи следующий вопрос или нажми «🚀 Старт» для новой сессии.")
     await state.set_state(QAForm.waiting_for_question)
 
 # Запуск
